@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Обработка изображения</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📘</text></svg>">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', sans-serif;
+            background-color: #0E1117;
+            color: #333;
+            padding: 40px 0;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #34415d;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+            color: #ffffff;
+        }
+
+        h2 {
+            font-size: 1.2em;
+            margin-bottom: 20px;
+            color: #ffffff;
+            font-weight: normal;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .drop-area {
+            border: 2px dashed #007bff;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+        }
+
+        .drop-area.highlight {
+            border-color: #0056b3;
+            background-color: rgba(0, 123, 255, 0.1);
+        }
+
+        .drop-text {
+            font-size: 18px;
+            color: #ffffff;
+            margin-bottom: 10px;
+        }
+
+        .file-info {
+            font-size: 14px;
+            color: #cccccc;
+        }
+
+        button {
+            padding: 12px 24px;
+            background-color: #110c4e;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            width: 100%;
+            margin-top: 20px;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background-color: #3246df;
+        }
+
+        #upload-form {
+            margin-bottom: 20px;
+        }
+
+        .output {
+            margin-top: 20px;
+            background: #f9f9f9;
+            padding: 16px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            font-size: 14px;
+            color: #555;
+            max-height: 300px;
+            overflow-y: scroll;
+            word-wrap: break-word;
+            font-family: monospace;
+            display: none;
+        }
+
+        .error {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+
+        #image-preview {
+            margin-top: 30px;
+            text-align: center;
+            display: none;
+            position: relative;
+        }
+
+        #image-preview img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        #download-btn {
+            margin-top: 20px;
+            display: none;
+            padding: 12px 24px;
+            background-color: #17a2b8;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        #download-btn:hover {
+            background-color: #138496;
+        }
+
+        #result-section {
+            display: none;
+        }
+
+        .file-selected {
+            margin-top: 15px;
+            color: #ffffff;
+            font-size: 14px;
+        }
+
+        .rectangle {
+            position: absolute;
+            border: 2px solid red;
+            background-color: rgba(255, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: red;
+            font-weight: bold;
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1>Обработка изображения документа</h1>
+        <h2>Перетащите файл или кликните для загрузки</h2>
+        {% if init_error %}
+        <p class="error">Ошибка при загрузке страницы: {{ init_error }}</p>
+        {% endif %}
+        <form id="upload-form">
+            <div class="form-group">
+                <div id="drop-area" class="drop-area">
+                    <div class="drop-text">Перетащите изображение сюда или нажмите</div>
+                    <div class="file-info">Лимит 50 Мб размер файла • PNG, JPG, JPEG</div>
+                </div>
+                <input type="file" id="image-input" accept="image/png, image/jpeg, image/jpg" required />
+                <div id="file-selected" class="file-selected" style="display: none;"></div>
+            </div>
+            <button id="upload-btn">Отправить</button>
+        </form>
+
+        <div id="result-section">
+            <h1>Результат обработки</h1>
+
+            <div id="image-preview">
+                <canvas id="preview-canvas" style="display: none;"></canvas>
+            </div>
+
+            <pre id="output" class="output"></pre>
+
+            <button id="download-btn">Скачать JSON</button>
+        </div>
+    </div>
+
+    <script>
+        const uploadUrl = "{{ url_for('task_controller.create_task') }}";
+        const output = document.getElementById('output');
+        const imagePreview = document.getElementById('image-preview');
+        const downloadBtn = document.getElementById('download-btn');
+        const resultSection = document.getElementById('result-section');
+        const dropArea = document.getElementById('drop-area');
+        const fileInput = document.getElementById('image-input');
+        const fileSelected = document.getElementById('file-selected');
+        const previewCanvas = document.getElementById('preview-canvas');
+        const ctx = previewCanvas.getContext('2d');
+
+        // Handle drag and drop events
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight() {
+            dropArea.classList.add('highlight');
+        }
+
+        function unhighlight() {
+            dropArea.classList.remove('highlight');
+        }
+
+        // Handle dropped files
+        dropArea.addEventListener('drop', handleDrop, false);
+        dropArea.addEventListener('click', () => fileInput.click());
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+
+            if (files.length) {
+                fileInput.files = files;
+                updateFileInfo(files[0]);
+            }
+        }
+
+        fileInput.addEventListener('change', function () {
+            if (this.files.length) {
+                updateFileInfo(this.files[0]);
+            }
+        });
+
+        function updateFileInfo(file) {
+            fileSelected.textContent = `Выбран файл: ${file.name} (${formatFileSize(file.size)})`;
+            fileSelected.style.display = 'block';
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function drawRectanglesOnImage(image, results) {
+            // Clear previous rectangles
+            imagePreview.innerHTML = '';
+
+            // Create a new image element
+            const imgElement = document.createElement('img');
+            imgElement.src = image;
+
+            // Wait for image to load
+            imgElement.onload = function () {
+                const imgWidth = this.naturalWidth;
+                const imgHeight = this.naturalHeight;
+
+                // Set canvas size to match image
+                previewCanvas.width = imgWidth;
+                previewCanvas.height = imgHeight;
+
+                // Draw the image on canvas
+                ctx.drawImage(this, 0, 0);
+
+                // Draw rectangles for each result
+                results.forEach(item => {
+                    if (item.type === 'textarea') {
+                        const { x, y, width, height } = item.value;
+
+                        // Draw rectangle
+                        ctx.strokeStyle = 'red';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(x, y, width, height);
+
+                        // Add semi-transparent fill
+                        ctx.fillStyle = 'rgba(255, 0, 0, 0)';
+                        ctx.fillRect(x, y, width, height);
+
+                        // Add text label
+                        ctx.fillStyle = 'red';
+                        ctx.font = 'bold 12px Arial';
+                        // ctx.fillText(item.id, x + 5, y + height + 15);
+
+                        // Add text content if available
+                        if (item.value.text && item.value.text.length > 0) {
+                            ctx.fillText(item.value.text[0], x + 5, y + height + 15);
+                        }
+                    }
+                });
+
+                // Convert canvas to image and display
+                const resultImage = new Image();
+                resultImage.src = previewCanvas.toDataURL('image/png');
+                imagePreview.appendChild(resultImage);
+                imagePreview.style.display = 'block';
+            };
+        }
+
+        document.getElementById('upload-form').addEventListener('submit', async e => {
+            e.preventDefault();
+            output.textContent = '';
+            imagePreview.innerHTML = '';  // Clear previous image preview
+            downloadBtn.style.display = 'none';  // Hide the download button
+            resultSection.style.display = 'none'; // Hide result section
+
+            if (!fileInput.files.length) {
+                output.textContent = 'Пожалуйста, выберите файл.';
+                return;
+            }
+
+            const file = fileInput.files[0];
+            // Check file size (50MB limit)
+            if (file.size > 50 * 1024 * 1024) {
+                output.textContent = 'Файл слишком большой. Максимальный размер: 50MB.';
+                return;
+            }
+
+            // Check file type
+            const validTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+            if (!validTypes.includes(file.type)) {
+                output.textContent = 'Неподдерживаемый формат файла. Используйте PNG, JPG или JPEG.';
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('image', file);
+
+            output.textContent = 'Отправка…';
+            try {
+                const resp = await fetch(uploadUrl, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await resp.json();
+                if (!resp.ok) {
+                    output.textContent = 'Ошибка: ' + (data.error || resp.status);
+                } else {
+                    // Show result section
+                    resultSection.style.display = 'block';
+
+                    // Display the JSON data
+                    output.textContent = JSON.stringify(data, null, 2);
+                    output.style.display = 'block';
+
+                    // Create a preview URL for the uploaded image
+                    const imageUrl = URL.createObjectURL(file);
+
+                    // Draw rectangles on the image
+                    drawRectanglesOnImage(imageUrl, data.results);
+
+                    // Show download button
+                    downloadBtn.style.display = 'inline';
+                    downloadBtn.onclick = () => {
+                        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'result.json';
+                        a.click();
+                    };
+                }
+            } catch (err) {
+                output.textContent = 'Ошибка при запросе: ' + err.message;
+            }
+        });
+    </script>
+
+</body>
+
+</html>
