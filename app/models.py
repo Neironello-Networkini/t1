@@ -18,6 +18,7 @@ def init_models():
         filename="best.pt"
     )
     yolo_model = YOLO(model_path)
+    print("yolo log")
 
     # 3. Загружаем модель и токенизатор TrOCR
     trocr_processor = TrOCRProcessor.from_pretrained("kazars24/trocr-base-handwritten-ru")
@@ -26,6 +27,7 @@ def init_models():
     trocr_model.to(device)
 
     reader = easyocr.Reader(['ru'], gpu=True, verbose=False)
+    print("end log")
 
     return {
         "yolo_model": yolo_model,
