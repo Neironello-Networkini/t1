@@ -38,6 +38,8 @@
 ## Запуск
 
 ```bash
+git clone <repository-url>
+cd <project-directory>
 docker compose up
 ```
 ## Примечания
