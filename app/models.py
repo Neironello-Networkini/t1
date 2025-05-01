@@ -4,6 +4,8 @@ from ultralytics import YOLO
 from huggingface_hub import hf_hub_download
 import logging
 from transformers import logging as hf_logging
+import easyocr
+
 
 # Инициализация моделей (выполняется один раз при импорте)
 def init_models():
@@ -23,11 +25,14 @@ def init_models():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     trocr_model.to(device)
 
+    reader = easyocr.Reader(['ru'], gpu=True, verbose=False)
+
     return {
         "yolo_model": yolo_model,
         "trocr_processor": trocr_processor,
         "trocr_model": trocr_model,
-        "device": device
+        "device": device,
+        "reader" : reader
     }
 
 # Инициализируем модели сразу при импорте

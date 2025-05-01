@@ -2,7 +2,6 @@ import os
 from datetime import datetime
 import cv2
 import numpy as np
-import easyocr
 import glob
 import re
 import torch
@@ -19,7 +18,7 @@ def process_image(image_path, base_output_dir="."):
     os.makedirs(output_crops_dir, exist_ok=True)
 
     # --- Инициализация EasyOCR ---
-    reader = easyocr.Reader(['ru'], gpu=True, verbose=False)
+    reader = models["reader"]
 
     # --- Загрузка изображения ---
     image = cv2.imread(image_path)
