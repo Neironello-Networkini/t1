@@ -172,6 +172,49 @@
             font-weight: bold;
             font-size: 12px;
         }
+
+        /* Стили для лоадера */
+        .loader {
+            width: 100%;
+            height: 4px;
+            background-color: #f3f3f3;
+            border-radius: 2px;
+            margin-top: 20px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .loader-bar {
+            height: 100%;
+            width: 0;
+            background-color: #007bff;
+            border-radius: 2px;
+            animation: loading 2s ease-in-out infinite;
+        }
+
+        @keyframes loading {
+            0% {
+                width: 0;
+                transform: translateX(0);
+            }
+
+            50% {
+                width: 100%;
+                transform: translateX(0);
+            }
+
+            100% {
+                width: 0;
+                transform: translateX(100%);
+            }
+        }
+
+        .status-text {
+            color: #ffffff;
+            text-align: center;
+            margin-top: 10px;
+            font-size: 14px;
+        }
     </style>
 </head>
 
@@ -193,6 +236,10 @@
                 <div id="file-selected" class="file-selected" style="display: none;"></div>
             </div>
             <button id="upload-btn">Отправить</button>
+            <div id="loader" class="loader">
+                <div class="loader-bar"></div>
+            </div>
+            <div id="status-text" class="status-text"></div>
         </form>
 
         <div id="result-section">
@@ -219,6 +266,8 @@
         const fileSelected = document.getElementById('file-selected');
         const previewCanvas = document.getElementById('preview-canvas');
         const ctx = previewCanvas.getContext('2d');
+        const loader = document.getElementById('loader');
+        const statusText = document.getElementById('status-text');
 
         // Handle drag and drop events
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -301,28 +350,45 @@
 
                 // Draw rectangles for each result
                 results.forEach(item => {
-                    if (item.type === 'textarea') {
-                        const { x, y, width, height } = item.value;
+                    const coordinates = item.value.coordinates;
+                    const flag = item.value.is_handwritten;
 
-                        // Draw rectangle
-                        ctx.strokeStyle = 'red';
+                    // Проверяем, что есть 4 точки
+                    if (coordinates && coordinates.length === 4) {
+                        // Рисуем полигон по 4 точкам
+                        ctx.beginPath();
+                        ctx.moveTo(coordinates[0][0], coordinates[0][1]);
+                        for (let i = 1; i < coordinates.length; i++) {
+                            ctx.lineTo(coordinates[i][0], coordinates[i][1]);
+                        }
+                        ctx.closePath();
+
+                        // Стили для прямоугольника
+                        if (flag == 1) {
+                            ctx.strokeStyle = 'red';
+                        } else {
+                            ctx.strokeStyle = 'green';
+                        }
                         ctx.lineWidth = 2;
-                        ctx.strokeRect(x, y, width, height);
+                        ctx.stroke();
 
-                        // Add semi-transparent fill
+                        // Полупрозрачная заливка
                         ctx.fillStyle = 'rgba(255, 0, 0, 0)';
-                        ctx.fillRect(x, y, width, height);
+                        ctx.fill();
 
-                        // Add text label
-                        ctx.fillStyle = 'red';
-                        ctx.font = 'bold 12px Arial';
-                        // ctx.fillText(item.id, x + 5, y + height + 15);
-
-                        // Add text content if available
+                        // Добавляем текст, если есть
                         if (item.value.text && item.value.text.length > 0) {
-                            ctx.fillText(item.value.text[0], x + 5, y + height + 15);
+                            // Вычисляем примерные x и y для текста (нижняя левая точка)
+                            const textX = coordinates[0][0];
+                            const textY = Math.max(coordinates[0][1], coordinates[1][1],
+                                coordinates[2][1], coordinates[3][1]) + 15;
+
+                            ctx.fillStyle = 'red';
+                            ctx.font = 'bold 12px Arial';
+                            ctx.fillText(item.value.text, textX, textY);
                         }
                     }
+
                 });
 
                 // Convert canvas to image and display
@@ -362,13 +428,23 @@
             const formData = new FormData();
             formData.append('image', file);
 
-            output.textContent = 'Отправка…';
+            // Показываем лоадер и статус
+            loader.style.display = 'block';
+            statusText.textContent = 'Обработка изображения...';
+            document.getElementById('upload-btn').disabled = true;
+
             try {
                 const resp = await fetch(uploadUrl, {
                     method: 'POST',
                     body: formData
                 });
                 const data = await resp.json();
+
+                // Скрываем лоадер после получения ответа
+                loader.style.display = 'none';
+                statusText.textContent = '';
+                document.getElementById('upload-btn').disabled = false;
+
                 if (!resp.ok) {
                     output.textContent = 'Ошибка: ' + (data.error || resp.status);
                 } else {
@@ -397,6 +473,11 @@
                     };
                 }
             } catch (err) {
+                // Скрываем лоадер в случае ошибки
+                loader.style.display = 'none';
+                statusText.textContent = '';
+                document.getElementById('upload-btn').disabled = false;
+
                 output.textContent = 'Ошибка при запросе: ' + err.message;
             }
         });

@@ -4,9 +4,11 @@ from flask import Blueprint, render_template, request, jsonify
 from werkzeug.datastructures import FileStorage
 from flasgger import swag_from
 import base64
+from datetime import datetime
+import os
 from io import BytesIO
 from PIL import Image
-
+from .image_processing import recognize_model
 
 logger = logging.getLogger(__name__)
 task_controller = Blueprint("task_controller", __name__)
@@ -149,9 +151,9 @@ def create_task():
         )
 
     try:
-        # Проверка, что файл действительно является изображением
-        img = Image.open(image)
-
+        # Открываем изображение и проверяем его
+        img = Image.open(image.stream)
+        
         # Проверка формата изображения
         if img.format not in ["JPEG", "PNG"]:
             return (
@@ -163,61 +165,27 @@ def create_task():
                 400,
             )
 
-        # Выводим размер изображения в консоль
+        # Выводим информацию об изображении
         print(f"Image size: {img.size} pixels (width x height)")
         print(f"Image format: {img.format}")
         print(f"Image mode: {img.mode}")
 
-        # Сохраняем изображение в память в формате PNG
-        img_io = BytesIO()
-        img.save(img_io, "PNG")
-        img_io.seek(0)
-
-        # Преобразуем изображение в строку Base64
-        # img_base64 = base64.b64encode(img_io.getvalue()).decode("utf-8")
+        # Генерируем уникальное имя файла
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')[:-3]
+        filename = f"{timestamp}.png"  # всегда сохраняем как PNG
+    
+        # Сохраняем изображение
+        save_path = os.path.join('images', filename)
+        img.save(save_path, format='PNG')
 
         # Формируем результат с изображением и данными
-        result = {
-            "results": [
-                {
-                    "id": "cKN57KAHI2",
-                    "type": "textarea",
-                    "value": {
-                        "x": 603.54,
-                        "y": 346.86,
-                        "text": ["Евгений"],
-                        "width": 128.85,
-                        "height": 30.44,
-                        "rotation": 0,
-                    },
-                },
-                {
-                    "id": "Xk8Pq93mL1",
-                    "type": "textarea",
-                    "value": {
-                        "x": 200.54,
-                        "y": 346.86,
-                        "text": ["Осинин"],
-                        "width": 128.85,
-                        "height": 33.44,
-                        "rotation": 0,
-                    },
-                },
-                {
-                    "id": "T5hR72nBv9",
-                    "type": "textarea",
-                    "value": {
-                        "x": 200.54,
-                        "y": 380.86,
-                        "text": ["Аркадьевич"],
-                        "width": 150.85,
-                        "height": 65.44,
-                        "rotation": 0,
-                    },
-                },
-            ]
-        }
+        result = recognize_model(save_path)
+        os.remove(save_path)
         return jsonify(result), 200
+        
+    except IOError as e:
+        logger.error(f"Invalid image file: {e}")
+        return jsonify({"error": "Файл не является корректным изображением"}), 400
     except Exception as e:
         logger.error(f"Error creating task with image: {e}")
         return jsonify({"error": str(e)}), 500
